@@ -70,9 +70,9 @@ namespace CacheCommander
 
         }
 
-        public DbDataReader ExecuteCacheDataReader()
+        public DbDataReader ExecuteCacheDataReader(CommandBehavior behavior = CommandBehavior.Default)
         {
-            return ExecuteDbDataReader(CommandBehavior.Default);
+            return ExecuteDbDataReader(behavior);
         }
 
         public override object ExecuteScalar()
