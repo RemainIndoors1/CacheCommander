@@ -54,7 +54,7 @@ namespace CacheCommander
                     var row = new Dictionary<string, object>();
                     foreach (var colName in columnNames)
                     {
-                        row[colName] = reader[colName];
+                        row[colName.ToLower()] = reader[colName];
                     }
                     resultData.Add(row);
                 }
@@ -109,7 +109,7 @@ namespace CacheCommander
 
         private string GenerateCacheKey()
         {
-            return _innerCommand.CommandText + string.Join(",", _innerCommand.Parameters.Cast<DbParameter>().Select(p => p.Value));
+            return _innerCommand.CommandText + "_" + string.Join("_", _innerCommand.Parameters.Cast<DbParameter>().Select(p => p.Value));
         }
 
         private Dictionary<string, int> GetCacheProcedures()

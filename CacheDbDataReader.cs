@@ -30,14 +30,14 @@ namespace CacheCommander
             return false;
         }
 
-        public override object this[string name] => _rows[_currentIndex].TryGetValue(name, out var value) ? value : throw new IndexOutOfRangeException($"Column '{name}' not found.");
+        public override object this[string name] => _rows[_currentIndex].TryGetValue(name.ToLower(), out var value) ? value : throw new IndexOutOfRangeException($"Column '{name}' not found.");
         public override object this[int ordinal] => _rows[_currentIndex][_columnNames[ordinal]];
 
         public override object GetValue(int ordinal) => _rows[_currentIndex][_columnNames[ordinal]];
         public override bool IsDBNull(int ordinal) => GetValue(ordinal) == DBNull.Value;
 
         public override string GetName(int ordinal) => _columnNames[ordinal];
-        public override int GetOrdinal(string name) => Array.IndexOf(_columnNames, name);
+        public override int GetOrdinal(string name) => Array.IndexOf(_columnNames, name.ToLower());
         public override int FieldCount => _columnNames.Length;
         public override bool HasRows => _rows.Count > 0;
 
