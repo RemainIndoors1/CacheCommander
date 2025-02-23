@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.Common;
 using System.Linq;
 using System.Text;
@@ -13,11 +14,13 @@ namespace CacheCommander
         private readonly List<Dictionary<string, object>> _rows;
         private readonly string[] _columnNames;
         private int _currentIndex = -1;
+        private readonly DataTable _schemaTable;
 
-        public CacheDbDataReader(List<Dictionary<string, object>> rows)
+        public CacheDbDataReader(List<Dictionary<string, object>> rows, DataTable schemaTable)
         {
             _rows = rows ?? new List<Dictionary<string, object>>();
             _columnNames = _rows.Any() ? _rows.First().Keys.ToArray() : new string[0];
+            _schemaTable = schemaTable;
         }
 
         public override bool Read()
@@ -46,7 +49,6 @@ namespace CacheCommander
         public override int RecordsAffected => 0;
 
         public override void Close() { }
-        public void Dispose() { }
 
         public override string GetString(int ordinal) => GetValue(ordinal)?.ToString() ?? string.Empty;
         public override short GetInt16(int ordinal) => Convert.ToInt16(GetValue(ordinal));
@@ -55,10 +57,31 @@ namespace CacheCommander
         public override double GetDouble(int ordinal) => Convert.ToDouble(GetValue(ordinal));
         public override bool GetBoolean(int ordinal) => Convert.ToBoolean(GetValue(ordinal));
 
-        public override System.Data.DataTable GetSchemaTable() => throw new NotImplementedException();
+        public override System.Data.DataTable GetSchemaTable()
+        {
+            if (_schemaTable == null)
+                throw new InvalidOperationException("Schema table is unavailable.");
+
+            return _schemaTable.Copy();
+        }
+
         public override System.Collections.IEnumerator GetEnumerator() => throw new NotImplementedException();
-        public override bool NextResult() => throw new NotImplementedException();
-        public override int GetValues(object[] values) => throw new NotImplementedException();
+        public override bool NextResult() => false;
+        public override int GetValues(object[] values)
+        {
+            if (_currentIndex < 0 || _currentIndex >= _rows.Count)
+                throw new InvalidOperationException("No data available");
+
+            var currentRow = _rows[_currentIndex];
+            int fieldCount = FieldCount;
+
+            for (int i = 0; i < fieldCount; i++)
+            {
+                values[i] = currentRow.Values.ElementAt(i) ?? DBNull.Value;
+            }
+
+            return fieldCount;
+        }
         public override byte GetByte(int ordinal) => throw new NotImplementedException();
         public override char GetChar(int ordinal) => throw new NotImplementedException();
         public override long GetChars(int ordinal, long dataOffset, char[] buffer, int bufferOffset, int length) => throw new NotImplementedException();

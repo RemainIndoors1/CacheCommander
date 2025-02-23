@@ -14,6 +14,7 @@ namespace CacheCommander
 
         private readonly DbCommand _innerCommand;
         private static readonly MemoryCache _cache = MemoryCache.Default;
+        private bool _cacheSchema = false;
 
         private const string AppConfigSectionName = "CacheCommander.StoredProcedures";
         private const int DefaultCacheTimeInMinutes = 3;
@@ -31,6 +32,7 @@ namespace CacheCommander
             var procedures = GetCacheProcedures();
 
             bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true;
+            DataTable schemaTable;
 
             if (useCache)
             {
@@ -38,13 +40,15 @@ namespace CacheCommander
                 if (_cache.Contains(cacheKey))
                 {
                     var cachedData = (List<Dictionary<string, object>>)_cache.Get(cacheKey);
-                    return new CacheDbDataReader(cachedData);
+                    schemaTable = _cacheSchema ? (DataTable)_cache.Get(cacheKey + "_Schema") : null;
+                    return new CacheDbDataReader(cachedData, schemaTable);
                 }
 
             }
 
             using (var reader = _innerCommand.ExecuteReader(behavior))
             {
+                schemaTable = _cacheSchema ? reader.GetSchemaTable()?.Copy() : null;
                 var resultData = new List<Dictionary<string, object>>();
                 var columnNames = Enumerable.Range(0, reader.FieldCount)
                                         .Select(reader.GetName)
@@ -63,15 +67,23 @@ namespace CacheCommander
                 {
                     TimeSpan cacheDuration = TimeSpan.FromMinutes(procedures[_innerCommand.CommandText]);
                     _cache.Set(cacheKey, resultData, DateTimeOffset.UtcNow.Add(cacheDuration));
+                    if (_cacheSchema)
+                        _cache.Set(cacheKey + "_Schema", schemaTable, DateTimeOffset.UtcNow.Add(cacheDuration));
                 }
                 
-                return new CacheDbDataReader(resultData);
+                return new CacheDbDataReader(resultData, schemaTable);
             }
 
         }
 
         public DbDataReader ExecuteCacheDataReader(CommandBehavior behavior = CommandBehavior.Default)
         {
+            return ExecuteDbDataReader(behavior);
+        }
+
+        public DbDataReader ExecuteAdapterDataReader(CommandBehavior behavior = CommandBehavior.Default)
+        {
+            _cacheSchema = true;
             return ExecuteDbDataReader(behavior);
         }
 
@@ -105,7 +117,57 @@ namespace CacheCommander
             return _innerCommand.ExecuteScalar();
         }
 
-        public override int ExecuteNonQuery() => _innerCommand.ExecuteNonQuery();
+        public override int ExecuteNonQuery()
+        {
+            if (!HasOutputParameters())
+                return _innerCommand.ExecuteNonQuery();
+            
+            var procedures = GetCacheProcedures();
+
+            bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true;
+
+            if (!useCache)
+                return _innerCommand.ExecuteNonQuery();
+
+            string cacheKey = GenerateCacheKey();
+
+            if (_cache.Contains(cacheKey))
+            {
+                var cachedResult = (Tuple<int, Dictionary<string, object>>)_cache.Get(cacheKey);
+
+                foreach (DbParameter param in _innerCommand.Parameters)
+                {
+                    if (param.Direction == ParameterDirection.Output || param.Direction == ParameterDirection.InputOutput)
+                    {
+                        param.Value = cachedResult.Item2[param.ParameterName];
+                    }
+                    return cachedResult.Item1;
+                }
+            }
+
+            // Execute and capture results
+            int result = _innerCommand.ExecuteNonQuery();
+            var outputValues = new Dictionary<string, object>();
+
+            foreach (DbParameter param in _innerCommand.Parameters)
+            {
+                if (param.Direction == ParameterDirection.Output || param.Direction == ParameterDirection.InputOutput)
+                {
+                    outputValues[param.ParameterName] = param.Value;
+                }
+            }
+
+            TimeSpan cacheDuration = TimeSpan.FromMinutes(procedures[_innerCommand.CommandText]);
+            _cache.Set(cacheKey, Tuple.Create(result, outputValues), DateTimeOffset.UtcNow.Add(cacheDuration));
+            return result;
+
+        }
+
+        private bool HasOutputParameters()
+        {
+            return _innerCommand.Parameters.Cast<DbParameter>()
+                .Any(p => p.Direction == ParameterDirection.Output || p.Direction == ParameterDirection.InputOutput);
+        }
 
         private string GenerateCacheKey()
         {

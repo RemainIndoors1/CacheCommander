@@ -46,6 +46,9 @@
     <Compile Include="CacheDbCommand.cs">
       <SubType>Component</SubType>
     </Compile>
+    <Compile Include="CacheDbDataAdapter.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="CacheDbDataReader.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

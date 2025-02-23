@@ -51,6 +51,39 @@ conn.Close();
 conn.Dispose();
 ```
 
+## Update Feb. 22 2025
+
+*Change log*
+
+* Fixing a few bugs
+* Adding more bugs in to replace the old ones
+* Adding support for Output parameters when calling ExecuteNonQuery
+* Adding CacheDbDataAdapter class to replace SqlDataAdapter - Experimental. Still testing
+
+```
+// CacheDbDataAdapter usage
+
+DataTable myTable = new DataTable();
+
+SqlConnection conn = new SqlConnection("SomeSqlConnectionStringValue");
+conn.Open();
+using (CacheDbCommand cmd = new CacheDbCommand(new SqlCommand("my.storedprocedure.name", conn)))
+{
+    cmd.CommandType = CommandType.StoredProcedure;
+    cmd.Parameters.Add(new SqlParameter("@ParameterName", "value"));
+
+    var adapter = new CacheDbDataAdapter(cmd);
+    adapter.Fill(myTable);
+
+    foreach (DataRow row in myTable.Rows)
+    {
+        Console.WriteLine(row["ColumnName"]);
+    }
+}
+conn.Close();
+conn.Dispose();
+```
+
 ## How the above code works
 
 This is basically a wrapper for the SqlDataReader, which uses app.config settings to decide whether to cache the result of your SQL call.  
