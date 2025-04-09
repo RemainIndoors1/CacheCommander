@@ -1,12 +1,6 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.ComponentModel;
-using System.Configuration;
 using System.Data;
 using System.Data.Common;
-using System.Data.SqlClient;
-using System.Globalization;
 using System.Linq;
 using System.Runtime.Caching;
 
@@ -16,9 +10,6 @@ namespace CacheCommander
     {
         private readonly CacheDbCommand _cachedCommand;
         private static readonly MemoryCache _cache = MemoryCache.Default;
-
-        private const string AppConfigSectionName = "CacheCommander.StoredProcedures";
-        private const int DefaultCacheTimeInMinutes = 3;
 
         private CacheDbDataAdapter()
         {
@@ -30,18 +21,16 @@ namespace CacheCommander
             _cachedCommand = command ?? throw new ArgumentNullException(nameof(command));
         }
 
-
-
         public override int Fill(DataSet dataSet)
         {
             if (dataSet == null)
                 throw new InvalidOperationException("dataSet cannot be null");
 
-            var procedures = GetCacheProcedures();
-
-            bool useCache = procedures?.Keys?.Contains(_cachedCommand.CommandText) == true;
-
             string cacheKey = GenerateCacheKey();
+
+            var procedures = Configuration.GetCacheProcedures();
+
+            bool useCache = procedures?.Keys?.Contains(_cachedCommand.CommandText) == true && cacheKey?.Length > 0;
 
             if (useCache && _cache.Contains(cacheKey))
             {
@@ -74,11 +63,11 @@ namespace CacheCommander
             if (dataTable == null)
                 throw new ArgumentNullException(nameof(dataTable));
 
-            var procedures = GetCacheProcedures();
-
-            bool useCache = procedures?.Keys?.Contains(_cachedCommand.CommandText) == true;
-
             string cacheKey = GenerateCacheKey();
+
+            var procedures = Configuration.GetCacheProcedures();
+
+            bool useCache = procedures?.Keys?.Contains(_cachedCommand.CommandText) == true && cacheKey?.Length > 0;
 
             if (useCache && _cache.Contains(cacheKey))
             {
@@ -102,45 +91,16 @@ namespace CacheCommander
             return dataTable.Rows.Count;
         }
 
-
         private string GenerateCacheKey()
         {
-            return _cachedCommand.CommandText + string.Join(",", _cachedCommand.Parameters.Cast<DbParameter>().Select(p => p.Value?.ToString() ?? "NULL"));
-        }
-
-        private Dictionary<string, int> GetCacheProcedures()
-        {
-            Dictionary<string, int> response = new Dictionary<string, int>();
-
             try
             {
-                var config = ConfigurationManager.GetSection(AppConfigSectionName);
-
-                if (config != null)
-                {
-                    var collection = (NameValueCollection)config;
-
-                    foreach (string key in collection.Keys)
-                    {
-                        int cacheTimeInMinutes;
-
-                        // value stored in app.config should be integer time in minutes to cache the result of the stored procedure (key)
-                        if (!int.TryParse(collection[key], out cacheTimeInMinutes) || !(cacheTimeInMinutes > 0))
-                        {
-                            cacheTimeInMinutes = DefaultCacheTimeInMinutes;
-                        }
-
-                        response[key] = cacheTimeInMinutes;
-                    }
-                }
+                return _cachedCommand.CommandText + string.Join(",", _cachedCommand.Parameters.Cast<DbParameter>().Select(p => p.Value?.ToString() ?? "NULL"));
             }
-            catch (Exception ex)
+            catch
             {
-                response = new Dictionary<string, int>();
-                Console.WriteLine(ex.ToString());
+                return string.Empty;
             }
-
-            return response;
         }
 
     }

@@ -1,7 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Collections.Specialized;
-using System.Configuration;
 using System.Data;
 using System.Data.Common;
 using System.Linq;
@@ -16,9 +14,6 @@ namespace CacheCommander
         private static readonly MemoryCache _cache = MemoryCache.Default;
         private bool _cacheSchema = false;
 
-        private const string AppConfigSectionName = "CacheCommander.StoredProcedures";
-        private const int DefaultCacheTimeInMinutes = 3;
-
         public CacheDbCommand(DbCommand innerCommand)
         {
             _innerCommand = innerCommand ?? throw new ArgumentNullException(nameof(innerCommand));
@@ -29,9 +24,9 @@ namespace CacheCommander
 
             string cacheKey = GenerateCacheKey();
 
-            var procedures = GetCacheProcedures();
+            var procedures = Configuration.GetCacheProcedures();
 
-            bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true;
+            bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true && cacheKey?.Length > 0;
             DataTable schemaTable;
 
             if (useCache)
@@ -91,9 +86,9 @@ namespace CacheCommander
         {
             string cacheKey = GenerateCacheKey();
 
-            var procedures = GetCacheProcedures();
+            var procedures = Configuration.GetCacheProcedures();
 
-            bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true;
+            bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true && cacheKey?.Length > 0;
 
             if (useCache)
             {
@@ -121,15 +116,15 @@ namespace CacheCommander
         {
             if (!HasOutputParameters())
                 return _innerCommand.ExecuteNonQuery();
-            
-            var procedures = GetCacheProcedures();
 
-            bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true;
+            string cacheKey = GenerateCacheKey();
+
+            var procedures = Configuration.GetCacheProcedures();
+
+            bool useCache = procedures?.Keys?.Contains(_innerCommand.CommandText) == true && cacheKey?.Length > 0;
 
             if (!useCache)
                 return _innerCommand.ExecuteNonQuery();
-
-            string cacheKey = GenerateCacheKey();
 
             if (_cache.Contains(cacheKey))
             {
@@ -165,48 +160,27 @@ namespace CacheCommander
 
         private bool HasOutputParameters()
         {
-            return _innerCommand.Parameters.Cast<DbParameter>()
+            try
+            {
+                return _innerCommand.Parameters.Cast<DbParameter>()
                 .Any(p => p.Direction == ParameterDirection.Output || p.Direction == ParameterDirection.InputOutput);
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private string GenerateCacheKey()
         {
-            return _innerCommand.CommandText + "_" + string.Join("_", _innerCommand.Parameters.Cast<DbParameter>().Select(p => p.Value));
-        }
-
-        private Dictionary<string, int> GetCacheProcedures()
-        {
-            Dictionary<string, int> response = new Dictionary<string, int>();
-
             try
             {
-                var config = ConfigurationManager.GetSection(AppConfigSectionName);
-
-                if (config != null)
-                {
-                    var collection = (NameValueCollection)config;
-
-                    foreach (string key in collection.Keys)
-                    {
-                        int cacheTimeInMinutes;
-
-                        // value stored in app.config should be integer time in minutes to cache the result of the stored procedure (key)
-                        if (!int.TryParse(collection[key], out cacheTimeInMinutes) || !(cacheTimeInMinutes > 0))
-                        {
-                            cacheTimeInMinutes = DefaultCacheTimeInMinutes;
-                        }
-
-                        response[key] = cacheTimeInMinutes;
-                    }
-                }
+                return _innerCommand.CommandText + "_" + string.Join("_", _innerCommand.Parameters.Cast<DbParameter>().Select(p => p.Value?.ToString() ?? "NULL"));
             }
-            catch (Exception ex)
+            catch
             {
-                response = new Dictionary<string, int>();
-                Console.WriteLine(ex.ToString());
+                return string.Empty;
             }
-
-            return response;
         }
 
         public override string CommandText { get => _innerCommand.CommandText; set => _innerCommand.CommandText = value; }
