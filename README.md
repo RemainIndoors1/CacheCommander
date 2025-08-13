@@ -25,6 +25,9 @@ If you assign a given stored procedure value="0" it will disable caching for tha
 
 ## Example usage in C Sharp
 
+> [!WARNING]
+> When creating a new SqlParameter like in the examples below, if you create an instance of SqlParameter with a value of 0, it will pass Null into the stored procedure. See the `Remarks` section [Here](https://learn.microsoft.com/en-us/dotnet/api/microsoft.data.sqlclient.sqlparameter.-ctor?view=sqlclient-dotnet-core-6.0#microsoft-data-sqlclient-sqlparameter-ctor(system-string-system-object))
+
 In the examples below, you'll see we change the SqlCommand to a new CacheDbCommand object, which passes in the new SqlCommand. 
 After that, we set the CommandType to StoredProcedure and add Parameters as needed.
 
